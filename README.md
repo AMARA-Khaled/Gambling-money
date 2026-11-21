@@ -1,36 +1,56 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Drahem L7ram 🎰
 
-## Getting Started
+A fake-money chip tracker for in-person **poker** & **blackjack** nights. Deal
+real cards; the app handles the money — live betting, side pots, buy-ins, and a
+lifetime leaderboard.
 
-First, run the development server:
+Built with **Next.js 16** (App Router, Cache Components), **Auth.js** (Google),
+**Neon Postgres** + **Drizzle ORM**, Tailwind v4. Deploys on **Vercel**.
+
+## Local setup
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env.local   # then fill in the values (see below)
+npm run db:migrate           # create tables in your Neon database
+npm run dev                  # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Environment variables (`.env.local`)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Variable | What it is |
+| --- | --- |
+| `DATABASE_URL` | Neon **direct** connection (used by migrations) |
+| `DATABASE_URL_POOLED` | Neon **pooled** connection (used at runtime) |
+| `AUTH_SECRET` | Random secret — `openssl rand -base64 32` |
+| `AUTH_TRUST_HOST` | `true` |
+| `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Google OAuth 2.0 client credentials |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Google OAuth
 
-## Learn More
+In [Google Cloud Console → Credentials](https://console.cloud.google.com/apis/credentials),
+create an **OAuth 2.0 Client (Web application)** and add **Authorized redirect URIs**:
 
-To learn more about Next.js, take a look at the following resources:
+```
+http://localhost:3000/api/auth/callback/google
+https://YOUR-APP.vercel.app/api/auth/callback/google
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Configure the OAuth consent screen; while it's in *Testing*, add each player's
+Gmail as a **Test user**.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Database
 
-## Deploy on Vercel
+Schema lives in [`lib/db/schema.ts`](lib/db/schema.ts).
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm run db:generate   # generate SQL migration from schema changes
+npm run db:migrate    # apply migrations (no TTY needed; Vercel-safe)
+npm run db:studio     # browse data
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Deploy to Vercel
+
+See the deploy steps in the project chat / below. In short: import the repo in
+Vercel, add the same env vars, point `AUTH_GOOGLE` redirect URI at the Vercel
+domain, and run `npm run db:migrate` once against the production database.
