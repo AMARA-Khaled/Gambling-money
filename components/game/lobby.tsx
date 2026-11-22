@@ -1,12 +1,21 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useSWRConfig } from "swr";
 import type { GameState, StatePlayer } from "@/lib/game-types";
-import { joinOpenGame } from "@/app/actions/games";
+import {
+  joinOpenGame,
+  startGameAction,
+  kickPlayerAction,
+} from "@/app/actions/games";
 import { JoinQR } from "./qr-code";
 
 export function Lobby({ state }: { state: GameState }) {
   const { game, me, players } = state;
+  const { mutate } = useSWRConfig();
+  const refresh = () => mutate(`/api/games/${game.id}/state`);
+
+  const [actionError, setActionError] = useState<string | null>(null);
 
   return (
     <div className="mx-auto w-full max-w-lg px-4 py-6">
@@ -15,8 +24,7 @@ export function Lobby({ state }: { state: GameState }) {
       <div className="mt-5 rounded-2xl border border-border bg-surface/50 p-5">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold">
-            Players{" "}
-            <span className="text-muted">({players.length})</span>
+            Players <span className="text-muted">({players.length})</span>
           </h2>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-2.5 py-1 text-xs text-muted">
             <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse-slow" />
@@ -25,10 +33,26 @@ export function Lobby({ state }: { state: GameState }) {
         </div>
         <ul className="mt-4 space-y-2">
           {players.map((p) => (
-            <PlayerRow key={p.id} player={p} isHost={p.userId === game.createdBy} isMe={p.userId === me.userId} />
+            <PlayerRow
+              key={p.id}
+              player={p}
+              isHostPlayer={p.userId === game.createdBy}
+              isMe={p.userId === me.userId}
+              canKick={me.isHost && p.userId !== game.createdBy}
+              onKick={async () => {
+                setActionError(null);
+                const res = await kickPlayerAction(game.id, p.id);
+                if (res?.error) setActionError(res.error);
+                refresh();
+              }}
+            />
           ))}
         </ul>
       </div>
+
+      {actionError && (
+        <p className="mt-3 text-center text-sm text-loss">{actionError}</p>
+      )}
 
       {game.joinMode === "code" && game.joinCode && (
         <InvitePanel code={game.joinCode} />
@@ -44,10 +68,12 @@ export function Lobby({ state }: { state: GameState }) {
       )}
 
       {me.isHost && (
-        <p className="mt-6 text-center text-xs text-faint">
-          You&apos;re the host. Live play starts in the next update — gather
-          everyone in the meantime.
-        </p>
+        <StartGameBar
+          gameId={game.id}
+          playerCount={players.length}
+          onError={setActionError}
+          onDone={refresh}
+        />
       )}
     </div>
   );
@@ -78,13 +104,18 @@ function GameHeader({ state }: { state: GameState }) {
 
 function PlayerRow({
   player,
-  isHost,
+  isHostPlayer,
   isMe,
+  canKick,
+  onKick,
 }: {
   player: StatePlayer;
-  isHost: boolean;
+  isHostPlayer: boolean;
   isMe: boolean;
+  canKick: boolean;
+  onKick: () => Promise<void>;
 }) {
+  const [pending, startTransition] = useTransition();
   return (
     <li className="flex items-center gap-3 rounded-xl bg-surface-2/60 px-3 py-2.5">
       {player.image ? (
@@ -102,10 +133,58 @@ function PlayerRow({
         </p>
       </div>
       <div className="flex items-center gap-1.5">
-        {isHost && <Badge>Host</Badge>}
+        {isHostPlayer && <Badge>Host</Badge>}
         {player.isDealer && <Badge tone="gold">Dealer</Badge>}
+        {canKick && (
+          <button
+            aria-label={`Remove ${player.name ?? "player"}`}
+            disabled={pending}
+            onClick={() => startTransition(() => onKick())}
+            className="grid h-6 w-6 place-items-center rounded-full border border-border text-xs text-muted transition hover:border-loss hover:text-loss disabled:opacity-50"
+          >
+            ✕
+          </button>
+        )}
       </div>
     </li>
+  );
+}
+
+function StartGameBar({
+  gameId,
+  playerCount,
+  onError,
+  onDone,
+}: {
+  gameId: string;
+  playerCount: number;
+  onError: (msg: string | null) => void;
+  onDone: () => void;
+}) {
+  const [pending, startTransition] = useTransition();
+  const enough = playerCount >= 2;
+  return (
+    <div className="mt-6">
+      <button
+        disabled={pending || !enough}
+        onClick={() => {
+          onError(null);
+          startTransition(async () => {
+            const res = await startGameAction(gameId);
+            if (res?.error) onError(res.error);
+            onDone();
+          });
+        }}
+        className="w-full rounded-full bg-primary py-3.5 font-semibold text-primary-fg transition hover:bg-primary-dark disabled:opacity-50"
+      >
+        {pending ? "Starting…" : "Start game"}
+      </button>
+      {!enough && (
+        <p className="mt-2 text-center text-xs text-faint">
+          Waiting for at least 2 players.
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -119,9 +198,7 @@ function Badge({
   return (
     <span
       className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-        tone === "gold"
-          ? "bg-gold/15 text-gold"
-          : "bg-primary/15 text-primary"
+        tone === "gold" ? "bg-gold/15 text-gold" : "bg-primary/15 text-primary"
       }`}
     >
       {children}

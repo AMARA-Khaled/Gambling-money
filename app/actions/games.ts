@@ -8,6 +8,8 @@ import {
   joinGame,
   findGameIdByCode,
   getGameState,
+  startGame as startGameRecord,
+  kickPlayer as kickPlayerRecord,
 } from "@/lib/games";
 import { normalizeJoinCode } from "@/lib/codes";
 import { db } from "@/lib/db";
@@ -118,6 +120,23 @@ export async function joinWithCode(
   if (!result.ok) return { error: result.reason };
 
   redirect(`/games/${gameId}`);
+}
+
+export async function startGameAction(
+  gameId: string,
+): Promise<{ error: string } | void> {
+  const user = await requireUser();
+  const result = await startGameRecord(gameId, user.id);
+  if (!result.ok) return { error: result.reason };
+}
+
+export async function kickPlayerAction(
+  gameId: string,
+  gamePlayerId: string,
+): Promise<{ error: string } | void> {
+  const user = await requireUser();
+  const result = await kickPlayerRecord(gameId, user.id, gamePlayerId);
+  if (!result.ok) return { error: result.reason };
 }
 
 /** Used by the lobby "already a member?" check before auto-joining via link. */

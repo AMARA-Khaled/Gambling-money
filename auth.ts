@@ -12,7 +12,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     verificationTokensTable: verificationTokens,
   }),
   providers: [Google],
-  session: { strategy: "database" },
+  session: {
+    strategy: "database",
+    maxAge: 60 * 60 * 24 * 90, // stay signed in for 90 days
+    updateAge: 60 * 60 * 24, // refresh the session at most once a day
+  },
   callbacks: {
     session({ session, user }) {
       // Expose the stable user id to the app (needed for players/leaderboard).

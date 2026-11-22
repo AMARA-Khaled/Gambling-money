@@ -1,7 +1,8 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { requireUser } from "@/lib/dal";
+import { getCurrentUser } from "@/lib/dal";
 import { JoinForm } from "@/components/join-form";
+import { SignInToContinue } from "@/components/sign-in-to-continue";
 
 export default function JoinPage({ searchParams }: PageProps<"/join">) {
   return (
@@ -31,8 +32,22 @@ async function Gate({
 }: {
   searchParams: PageProps<"/join">["searchParams"];
 }) {
-  await requireUser();
   const { code } = await searchParams;
   const initialCode = typeof code === "string" ? code : "";
+
+  const user = await getCurrentUser();
+  if (!user?.id) {
+    const callbackUrl = initialCode
+      ? `/join?code=${encodeURIComponent(initialCode)}`
+      : "/join";
+    return (
+      <SignInToContinue
+        callbackUrl={callbackUrl}
+        title="Sign in to join"
+        subtitle="Sign in with Google and we'll drop you straight into the game."
+      />
+    );
+  }
+
   return <JoinForm initialCode={initialCode} />;
 }

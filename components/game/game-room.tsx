@@ -3,6 +3,7 @@
 import useSWR from "swr";
 import type { GameState } from "@/lib/game-types";
 import { Lobby } from "./lobby";
+import { GameTable } from "./table";
 
 const fetcher = async (url: string): Promise<GameState> => {
   const res = await fetch(url);
@@ -23,7 +24,7 @@ export function GameRoom({ initialState }: { initialState: GameState }) {
     case "lobby":
       return <Lobby state={state} />;
     case "active":
-      return <ComingSoon state={state} label="Live play" />;
+      return <GameTable state={state} />;
     case "ended":
       return <ComingSoon state={state} label="Final results" />;
   }

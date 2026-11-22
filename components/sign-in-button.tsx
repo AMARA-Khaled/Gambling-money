@@ -19,9 +19,18 @@ function Button({ large }: { large?: boolean }) {
   );
 }
 
-export function SignInButton({ large }: { large?: boolean }) {
+export function SignInButton({
+  large,
+  callbackUrl,
+}: {
+  large?: boolean;
+  callbackUrl?: string;
+}) {
   return (
     <form action={signInWithGoogle}>
+      {callbackUrl && (
+        <input type="hidden" name="callbackUrl" value={callbackUrl} />
+      )}
       <Button large={large} />
     </form>
   );

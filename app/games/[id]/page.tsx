@@ -1,8 +1,9 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
-import { requireUser } from "@/lib/dal";
+import { getCurrentUser } from "@/lib/dal";
 import { getGameState } from "@/lib/games";
 import { GameRoom } from "@/components/game/game-room";
+import { SignInToContinue } from "@/components/sign-in-to-continue";
 
 export default function GamePage({ params }: PageProps<"/games/[id]">) {
   return (
@@ -14,7 +15,16 @@ export default function GamePage({ params }: PageProps<"/games/[id]">) {
 
 async function Room({ params }: { params: PageProps<"/games/[id]">["params"] }) {
   const { id } = await params;
-  const user = await requireUser();
+  const user = await getCurrentUser();
+  if (!user?.id) {
+    return (
+      <SignInToContinue
+        callbackUrl={`/games/${id}`}
+        title="Sign in to view this game"
+        subtitle="Sign in with Google to see the table and join in."
+      />
+    );
+  }
   const state = await getGameState(id, user.id);
   if (!state) notFound();
   return <GameRoom initialState={state} />;

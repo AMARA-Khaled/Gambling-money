@@ -229,6 +229,87 @@ export async function getUserGames(
   }));
 }
 
+type MutationResult = { ok: true } | { ok: false; reason: string };
+
+/** Host starts the game: lobby -> active. Requires at least 2 players. */
+export async function startGame(
+  gameId: string,
+  userId: string,
+): Promise<MutationResult> {
+  return db.transaction(async (tx) => {
+    const [game] = await tx
+      .select()
+      .from(games)
+      .where(eq(games.id, gameId))
+      .limit(1);
+    if (!game) return { ok: false as const, reason: "Game not found" };
+    if (game.createdBy !== userId) {
+      return { ok: false as const, reason: "Only the host can start the game" };
+    }
+    if (game.status !== "lobby") {
+      return { ok: false as const, reason: "This game has already started" };
+    }
+
+    const [{ count }] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(gamePlayers)
+      .where(eq(gamePlayers.gameId, gameId));
+    if (count < 2) {
+      return { ok: false as const, reason: "Need at least 2 players to start" };
+    }
+
+    await tx
+      .update(games)
+      .set({ status: "active", updatedAt: new Date() })
+      .where(eq(games.id, gameId));
+
+    return { ok: true as const };
+  });
+}
+
+/** Host removes a player while still in the lobby. Cannot remove themselves. */
+export async function kickPlayer(
+  gameId: string,
+  hostId: string,
+  gamePlayerId: string,
+): Promise<MutationResult> {
+  return db.transaction(async (tx) => {
+    const [game] = await tx
+      .select()
+      .from(games)
+      .where(eq(games.id, gameId))
+      .limit(1);
+    if (!game) return { ok: false as const, reason: "Game not found" };
+    if (game.createdBy !== hostId) {
+      return {
+        ok: false as const,
+        reason: "Only the host can remove players",
+      };
+    }
+    if (game.status !== "lobby") {
+      return {
+        ok: false as const,
+        reason: "Players can only be removed in the lobby",
+      };
+    }
+
+    const [target] = await tx
+      .select()
+      .from(gamePlayers)
+      .where(
+        and(eq(gamePlayers.id, gamePlayerId), eq(gamePlayers.gameId, gameId)),
+      )
+      .limit(1);
+    if (!target) return { ok: true as const }; // already gone
+    if (target.userId === hostId) {
+      return { ok: false as const, reason: "You can't remove yourself" };
+    }
+
+    await tx.delete(gamePlayers).where(eq(gamePlayers.id, gamePlayerId));
+    return { ok: true as const };
+  });
+}
+
 export async function findGameIdByCode(code: string): Promise<string | null> {
   const [game] = await db
     .select({ id: games.id })
